@@ -1,0 +1,10 @@
+name: WNMobArenas
+version: 0.1
+main: cloud.stivenfocs.wnmobarenas.Main
+authors: [StivenFocs]
+softdepend: [PlaceholderAPI,Vault]
+commands:
+    wnmobarenas:
+permissions:
+    wnmobarenas.admin:
+        default: op
