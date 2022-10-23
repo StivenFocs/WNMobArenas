@@ -27,21 +27,18 @@ import java.util.*;
 public class Main extends JavaPlugin implements Listener {
 	
 	public static Main plugin;
-	public static ClassLoader classLoader;
 	
 	public static final Random random = new Random();
 	public Integer mainTaskId;
 	
-	
-	//public static HashMap<String, ItemStack> items = new HashMap<>();
-	public static LinkedHashMap<String, ItemStack> items = new LinkedHashMap<>();
+	public static Boolean spawnToggle = true;
+	public static LinkedHashMap<String, ItemData> items = new LinkedHashMap<>();
 	public static HashMap<String, Mob> mobs = new HashMap<>();
 	public static HashMap<String, ArenaRegion> arenaRegions = new HashMap<>();
 	public static HashMap<UUID, AliveMob> mobEntities = new HashMap<>();
 
 	public void onEnable() {
 		plugin = this;
-		classLoader = getClassLoader();
 		
 		getCommand("wnmobarenas").setExecutor(this);
 		getCommand("wnmobarenas").setTabCompleter(this);
@@ -91,7 +88,7 @@ public class Main extends JavaPlugin implements Listener {
 			getConfig().addDefault("messages.only_players", "&cSorry but only a player can execute this command!");
 			getConfig().addDefault("messages.incomplete_command", "&4Something is missing! &cSomething is missing, you can see the subcommands list by using /wnmobarenas");
 			getConfig().addDefault("messages.need_an_item", "&eYou have to hold and item in hand to set it.");
-			getConfig().addDefault("messages.item_not_found", "&cItem with name &f%item% &cnot found")
+			getConfig().addDefault("messages.item_not_found", "&cItem with name &f%item% &cnot found");
 			getConfig().addDefault("messages.item_saved", "&aItem successfully set in the configuration file.");
 			getConfig().addDefault("messages.you_got_wand", "&aYou got the &5&lRegionWand");
 			getConfig().addDefault("messages.invalid_region", "&cInvalid region selection");
@@ -104,6 +101,27 @@ public class Main extends JavaPlugin implements Listener {
 			getConfig().addDefault("messages.mob_not_found", "&cMob with name &f%mob% &cnot found.");
 			getConfig().addDefault("messages.mob_spawned", "&2Mob spawned");
 			getConfig().addDefault("messages.added_to_inventory", "&aItem added to your inventory");
+			getConfig().addDefault("messages.spawners_toggled", "&eSpawners status toggled");
+			getConfig().addDefault("messages.item_removed", "&cItem removed from the list.");
+			List<String> newHelp = new ArrayList<>();
+			newHelp.add("&8&m========================");
+			newHelp.add("&7&l* &b&lW&e&lN&d&lMobArenas");
+			newHelp.add(" ");
+			newHelp.add("&7&l* &7/wnmobarenas reload");
+			newHelp.add("&7&l* &7/wnmobarenas toggle");
+			newHelp.add("&7&l* &7/wnmobarenas getwand");
+			newHelp.add("&7&l* &7/wnmobarenas setregion <regionName>");
+			newHelp.add("&7&l* &7/wnmobarenas setspawner <regionName> <spawnerName>");
+			newHelp.add("&7&l* &7/wnmobarenas spawn <regionName> <spawnerName> <mobName>");
+			newHelp.add("&7&l* &7/wnmobarenas setitem <itemName>");
+			newHelp.add("&7&l* &7/wnmobarenas getitem <itemName>");
+			newHelp.add("&7&l* &7/wnmobarenas removeitem <itemName>");
+			newHelp.add("&7&l* &7/wnmobarenas viewitems [index offset]");
+			newHelp.add("&7&l* &7/wnmobarenas pos1");
+			newHelp.add("&7&l* &7/wnmobarenas pos2");
+			newHelp.add(" ");
+			newHelp.add("&8&m========================");
+			getConfig().addDefault("messages.help", newHelp);
 			
 			saveConfig();
 			reloadConfig();
@@ -117,7 +135,9 @@ public class Main extends JavaPlugin implements Listener {
 			items.clear();
 			for (String itemName : getConfig().getConfigurationSection("options.items").getKeys(false)) {
 				try {
-					items.put(itemName, ((ItemStack) getConfig().get("options.items." + itemName)));
+					Boolean customDisplayNameVisible = getConfig().getBoolean("options.items." + itemName + ".custom_displayname_visible", false);
+					String customDisplayName = getConfig().getString("options.items." + itemName + ".custom_displayname", itemName);
+					items.put(itemName, new ItemData(((ItemStack) getConfig().get("options.items." + itemName + ".item")), customDisplayNameVisible, customDisplayName));
 					//getLogger().info("Item loaded: " + itemName);
 				} catch (Exception ex) {
 					getLogger().warning("Unable to get the item: " + itemName);
@@ -138,21 +158,21 @@ public class Main extends JavaPlugin implements Listener {
 					Double health = getConfig().getDouble("options.mobs." + mobName + ".health", 20.0);
 					Boolean isBoss = getConfig().getBoolean("options.mobs." + mobName + ".is_boss");
 					ItemStack helmet = null, chestplate = null, leggings = null, boots = null, handItem = null;
-					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.helmet"))) helmet = items.get(getConfig().getString("options.mobs." + mobName + ".inventory.helmet"));
-					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.chestplate"))) chestplate = items.get(getConfig().getString("options.mobs." + mobName + ".inventory.chestplate"));
-					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.leggings"))) leggings = items.get(getConfig().getString("options.mobs." + mobName + ".inventory.leggings"));
-					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.boots"))) boots = items.get(getConfig().getString("options.mobs." + mobName + ".inventory.boots"));
-					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.hand_item"))) handItem = items.get(getConfig().getString("options.mobs." + mobName + ".inventory.hand_item"));
-					HashMap<ItemStack, Integer> new_drops = new HashMap<>();
-					for (String rawDrop : getConfig().getStringList("options.mobs." + mobName + ".drops")) {
+					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.helmet"))) helmet = getItemByName(getConfig().getString("options.mobs." + mobName + ".inventory.helmet"));
+					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.chestplate"))) chestplate = getItemByName(getConfig().getString("options.mobs." + mobName + ".inventory.chestplate"));
+					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.leggings"))) leggings = getItemByName(getConfig().getString("options.mobs." + mobName + ".inventory.leggings"));
+					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.boots"))) boots = getItemByName(getConfig().getString("options.mobs." + mobName + ".inventory.boots"));
+					if (items.containsKey(getConfig().getString("options.mobs." + mobName + ".inventory.hand_item"))) handItem = getItemByName(getConfig().getString("options.mobs." + mobName + ".inventory.hand_item"));
+					HashMap<ItemData, Integer> new_drops = new HashMap<>();
+					for (String rawDropItemName : getConfig().getStringList("options.mobs." + mobName + ".drops")) {
 						try {
-							String[] drop = rawDrop.split(",");
+							String[] drop = rawDropItemName.split(",");
 							if (drop.length > 1 && isDigit(drop[1])) {
 								if (items.containsKey(drop[0])) new_drops.put(items.get(drop[0]), Integer.parseInt(drop[1]));
-								else getLogger().warning("No item called \"" + drop[0] + "\" from the drop \"" + rawDrop + "\" of the mob \"" + mobName + "\"");
-							} else getLogger().warning("Unable to parse the mob \"" + mobName + "\" drop \"" + rawDrop + "\" for: invalid structure (Example: common_sword,50)");
+								else getLogger().warning("No item called \"" + drop[0] + "\" from the drop \"" + rawDropItemName + "\" of the mob \"" + mobName + "\"");
+							} else getLogger().warning("Unable to parse the mob \"" + mobName + "\" drop \"" + rawDropItemName + "\" for: invalid structure (Example: common_sword,50)");
 						} catch (Exception ex) {
-							getLogger().warning("Unable to parse the mob \"" + mobName + "\" drop \"" + rawDrop + "\" for: " + ex.getMessage());
+							getLogger().warning("Unable to parse the mob \"" + mobName + "\" drop \"" + rawDropItemName + "\" for: " + ex.getMessage());
 							ex.printStackTrace();
 						}
 					}
@@ -180,6 +200,10 @@ public class Main extends JavaPlugin implements Listener {
 					HashMap<String, RegionSpawner> newRegionSpawners = new HashMap<>();
 					
 					for (String spawnerName : getConfig().getConfigurationSection("options.regions." + arenaRegionName + ".spawners").getKeys(false)) {
+						String spawnerDisplayName = getConfig().getString("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".displayname", spawnerName);
+						Integer maxSpawnedMobs = getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".max_spawned_mobs", 15);
+						Integer maxSpawnedBosses = getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".max_spawned_bosses", maxSpawnedMobs);
+						
 						Location spawnerLocation = null;
 						try {
 							spawnerLocation = stringToLocation(getConfig().getString("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".location"));
@@ -203,25 +227,25 @@ public class Main extends JavaPlugin implements Listener {
 								getLogger().warning("Unable to parse the mob \"" + rawSpawnerMob + "\" of the spawner \"" + spawnerName + "\" of the region \"" + arenaRegionName + "\" for: " + ex.getMessage());
 							}
 						}
-						LinkedHashMap<Mob, Integer> sortedMap = new LinkedHashMap<>();
+						LinkedHashMap<Mob, Integer> sortedMobsRarity = new LinkedHashMap<>();
 						ArrayList<Integer> numbersList = new ArrayList<>();
 						numbersList.addAll(newMobs.values());
 						Collections.sort(numbersList);
 						for (Integer number : numbersList) {
 							for (Mob mob : newMobs.keySet()) {
 								if (newMobs.get(mob).equals(number)) {
-									sortedMap.put(mob, number);
+									sortedMobsRarity.put(mob, number);
 								}
 							}
 						}
-						LinkedHashMap<Mob, Integer> sortedMap1 = new LinkedHashMap<>();
+						LinkedHashMap<Mob, Integer> sortedBossesRarity = new LinkedHashMap<>();
 						ArrayList<Integer> numbersList1 = new ArrayList<>();
 						numbersList1.addAll(newBosses.values());
 						Collections.sort(numbersList1);
 						for (Integer number : numbersList) {
 							for (Mob mob : newBosses.keySet()) {
 								if (newBosses.get(mob).equals(number)) {
-									sortedMap1.put(mob, number);
+									sortedBossesRarity.put(mob, number);
 								}
 							}
 						}
@@ -229,7 +253,7 @@ public class Main extends JavaPlugin implements Listener {
 						Integer mobSpawnDelay = getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".mob_spawn_delay", getConfig().getInt("options.mob_spawn_delay"));
 						Integer bossSpawnDelay = getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".boss_spawn_delay", getConfig().getInt("options.boss_spawn_delay"));
 						
-						newRegionSpawners.put(spawnerName, new RegionSpawner(arenaRegionName, spawnerName, getConfig().getString("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".displayname", spawnerName), getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".maxSpawnedMobs", 15), spawnerLocation, sortedMap, sortedMap1, mobSpawnDelay, bossSpawnDelay));
+						newRegionSpawners.put(spawnerName, new RegionSpawner(arenaRegionName, spawnerName, spawnerDisplayName, maxSpawnedMobs, maxSpawnedBosses, spawnerLocation, sortedMobsRarity, sortedBossesRarity, mobSpawnDelay, bossSpawnDelay));
 					}
 					
 					arenaRegions.put(arenaRegionName, new ArenaRegion(arenaRegionName, displayname, newRegionSpawners));
@@ -240,47 +264,45 @@ public class Main extends JavaPlugin implements Listener {
 			}
 			
 			mainTaskId = Bukkit.getScheduler().runTaskTimer(this, () -> {
-				for (ArenaRegion arenaRegion : arenaRegions.values()) {
-					for (RegionSpawner regionSpawner : arenaRegion.getSpawners().values()) {
-						if (regionSpawner.getActualMobSpawnDelay() <= 0) {
-							regionSpawner.resetActualMobSpawnDelay();
-							
-							if (getSpawnerMobs(regionSpawner).size() < regionSpawner.getMaxSpawnedMobs()) {
-								if (regionSpawner.getMobs().size() > 0) {
-									Integer luck = (random.nextInt(100) + 1);
-									for (Mob mob : regionSpawner.getMobs().keySet()) {
-										if (luck <= regionSpawner.getMobs().get(mob)) {
-											if (new Random().nextInt(3) == 1) {
-												mob.spawn(regionSpawner, regionSpawner.getLocation());
-												break;
-											}
-										}
-									}
-									/*Mob randomMob = new ArrayList<>(regionSpawner.getMobs().keySet()).get(random.nextInt(regionSpawner.getMobs().size()));
-									if ((random.nextInt(99) + 1) <= regionSpawner.getMobs().get(randomMob)) {
-										randomMob.spawn(regionSpawner, regionSpawner.getLocation());
-									}*/
-								}
-							}
-						} else regionSpawner.setActualMobSpawnDelay(regionSpawner.getActualMobSpawnDelay() - 1);
-						
-						if (regionSpawner.getActualBossSpawnDelay() <= 0) {
-							regionSpawner.resetActualBossSpawnDelay();
-							
-							if (getSpawnerMobs(regionSpawner).size() < regionSpawner.getMaxSpawnedMobs()) {
-								if (regionSpawner.getBosses().size() > 0) {
-									Integer luck = (random.nextInt(100) + 1);
-									for (Mob boss : regionSpawner.getBosses().keySet()) {
-										if (luck <= regionSpawner.getBosses().get(boss)) {
-											if (new Random().nextInt(3) == 1) {
-												boss.spawn(regionSpawner, regionSpawner.getLocation());
-												break;
+				if (spawnToggle) {
+					for (ArenaRegion arenaRegion : arenaRegions.values()) {
+						for (RegionSpawner regionSpawner : arenaRegion.getSpawners().values()) {
+							if (regionSpawner.getActualMobSpawnDelay() <= 0) {
+								regionSpawner.resetActualMobSpawnDelay();
+								
+								if (getSpawnerMobs(regionSpawner).size() < regionSpawner.getMaxSpawnedMobs()) {
+									if (regionSpawner.getMobs().size() > 0) {
+										Integer luck = (random.nextInt(100) + 1);
+										for (Mob mob : regionSpawner.getMobs().keySet()) {
+											if (luck <= regionSpawner.getMobs().get(mob)) {
+												if (random.nextInt(3) == 1) {
+													mob.spawn(regionSpawner, regionSpawner.getLocation());
+													break;
+												}
 											}
 										}
 									}
 								}
-							}
-						} else regionSpawner.setActualBossSpawnDelay(regionSpawner.getActualBossSpawnDelay() - 1);
+							} else regionSpawner.setActualMobSpawnDelay(regionSpawner.getActualMobSpawnDelay() - 1);
+							
+							if (regionSpawner.getActualBossSpawnDelay() <= 0) {
+								regionSpawner.resetActualBossSpawnDelay();
+								
+								if (getSpawnerBosses(regionSpawner).size() < regionSpawner.getMaxSpawnedBosses()) {
+									if (regionSpawner.getBosses().size() > 0) {
+										Integer luck = (random.nextInt(100) + 1);
+										for (Mob boss : regionSpawner.getBosses().keySet()) {
+											if (luck <= regionSpawner.getBosses().get(boss)) {
+												if (random.nextInt(3) == 1) {
+													boss.spawn(regionSpawner, regionSpawner.getLocation());
+													break;
+												}
+											}
+										}
+									}
+								}
+							} else regionSpawner.setActualBossSpawnDelay(regionSpawner.getActualBossSpawnDelay() - 1);
+						}
 					}
 				}
 			}, 0L, 0L).getTaskId();
@@ -301,6 +323,12 @@ public class Main extends JavaPlugin implements Listener {
 		wandItemMeta.setDisplayName("§5§lWNMobArenas RegionWand");
 		wandItem.setItemMeta(wandItemMeta);
 		return wandItem;
+	}
+	
+	public static ItemStack getItemByName(String itemName) {
+		if (items.containsKey(itemName)) return items.get(itemName).itemStack;
+		
+		return new ItemStack(Material.DIRT);
 	}
 	
 	public static String locationToString(Location location, Boolean isBlock) {
@@ -353,19 +381,54 @@ public class Main extends JavaPlugin implements Listener {
 	public static List<AliveMob> getSpawnerMobs(RegionSpawner regionSpawner) {
 		List<AliveMob> spawnerMobs = new ArrayList<>();
 		for (AliveMob aliveMob : mobEntities.values()) {
-			if (aliveMob.ownerSpawner != null && aliveMob.ownerSpawner.equals(regionSpawner)) spawnerMobs.add(aliveMob);
+			if (aliveMob.ownerSpawner != null && !aliveMob.mob.isBoss() && aliveMob.ownerSpawner.equals(regionSpawner)) spawnerMobs.add(aliveMob);
 		}
+		
 		return spawnerMobs;
 	}
+	public static List<AliveMob> getSpawnerBosses(RegionSpawner regionSpawner) {
+		List<AliveMob> spawnerBosses = new ArrayList<>();
+		for (AliveMob aliveMob : mobEntities.values()) {
+			if (aliveMob.ownerSpawner != null && aliveMob.mob.isBoss() && aliveMob.ownerSpawner.equals(regionSpawner)) spawnerBosses.add(aliveMob);
+		}
+		
+		return spawnerBosses;
+	}
+	
+	public static ItemStack setStringData(ItemStack item, String field, String value) {
+        net.minecraft.server.v1_8_R3.ItemStack item_ = org.bukkit.craftbukkit.v1_8_R3.inventory.CraftItemStack.asNMSCopy(item);
+		if (item_.getTag() == null) item_.setTag(new net.minecraft.server.v1_8_R3.NBTTagCompound());
+		item_.getTag().setString(field, value);
+        return org.bukkit.craftbukkit.v1_8_R3.inventory.CraftItemStack.asCraftMirror(item_);
+    }
+    public static String getStringData(ItemStack item, String field) {
+        net.minecraft.server.v1_8_R3.ItemStack item_ = org.bukkit.craftbukkit.v1_8_R3.inventory.CraftItemStack.asNMSCopy(item);
+        if (item_.getTag() == null) item_.setTag(new net.minecraft.server.v1_8_R3.NBTTagCompound());
+		try {
+            return item_.getTag().getString(field);
+        } catch (NullPointerException ex) {
+            return null;
+        }
+    }
+    public static Boolean hasKey(ItemStack item, String field) {
+        net.minecraft.server.v1_8_R3.ItemStack item_ = org.bukkit.craftbukkit.v1_8_R3.inventory.CraftItemStack.asNMSCopy(item);
+        if (item_.getTag() == null) item_.setTag(new net.minecraft.server.v1_8_R3.NBTTagCompound());
+		return item_.getTag().hasKey(field);
+    }
 	
 	public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
 		if (sender.hasPermission("wnmobarenas.admin")) {
 			if (args.length == 0) {
-				sendString("", sender);
+				for (String line : getConfig().getStringList("messages.help")) {
+					sendString(line, sender);
+				}
 			} else {
 				if (args[0].equalsIgnoreCase("reload")) {
 					if (reload()) sendString("messages.configuration_reloaded", sender);
 					else sendString("messages.an_error_occurred", sender);
+				} else if (args[0].equalsIgnoreCase("toggle")) {
+					spawnToggle = !spawnToggle;
+					sendString("messages.spawners_toggled", sender);
 				} else if (args[0].equalsIgnoreCase("getwand")) {
 					if (sender instanceof Player) {
 						((Player) sender).getInventory().addItem(getWand());
@@ -423,7 +486,9 @@ public class Main extends JavaPlugin implements Listener {
 						if (args.length > 1) {
 							ItemStack itemInHand = p.getInventory().getItemInHand();
 							if (itemInHand != null && !itemInHand.getType().equals(Material.AIR)) {
-								getConfig().set("options.items." + args[1], itemInHand.clone());
+								getConfig().set("options.items." + args[1] + ".item", itemInHand.clone());
+								if (getConfig().get("options.items." + args[1] + ".custom_displayname_visible") == null) getConfig().set("options.items." + args[1] + ".custom_displayname_visible", false);
+								if (getConfig().get("options.items." + args[1] + ".custom_displayname") == null) getConfig().set("options.items." + args[1] + ".custom_displayname", args[1]);
 								saveConfig();
 								reload();
 								
@@ -437,8 +502,22 @@ public class Main extends JavaPlugin implements Listener {
 						
 						if (args.length > 1) {
 							if (items.containsKey(args[1])) {
-								p.getInventory().addItem(items.get(args[1]));
+								p.getInventory().addItem(getItemByName(args[1]));
 								sendString("messages.added_to_inventory", sender);
+							} else sendString(getConfig().getString("messages.item_not_found").replace("%item%", args[1]), sender);
+						} else sendString("messages.incomplete_command", sender);
+					} else sendString("messages.only_players", sender);
+				} else if (args[0].equalsIgnoreCase("removeitem")) {
+					if (sender instanceof Player) {
+						Player p = (Player) sender;
+						
+						if (args.length > 1) {
+							if (getConfig().get("options.items." + args[1]) != null) {
+								getConfig().set("options.items." + args[1], null);
+								saveConfig();
+								reload();
+								
+								sendString("messages.item_removed", sender);
 							} else sendString(getConfig().getString("messages.item_not_found").replace("%item%", args[1]), sender);
 						} else sendString("messages.incomplete_command", sender);
 					} else sendString("messages.only_players", sender);
@@ -459,9 +538,9 @@ public class Main extends JavaPlugin implements Listener {
 							}
 						}
 						
-						List<ItemStack> items = new ArrayList<>(this.items.values());
+						List<String> items = new ArrayList<>(this.items.keySet());
 						for (int i = startIndex; i < items.size(); i++) {
-							inv.addItem(items.get(i));
+							inv.addItem(getItemByName(items.get(i)));
 						}
 						
 						p.openInventory(inv);
@@ -491,23 +570,27 @@ public class Main extends JavaPlugin implements Listener {
 			if (args.length == 1) {
 				if (args[0].equals("")) {
 					su.add("reload");
+					su.add("toggle");
 					su.add("getwand");
 					su.add("setregion");
 					su.add("setspawner");
 					su.add("spawn");
 					su.add("setitem");
 					su.add("getitem");
+					su.add("removeitem");
 					su.add("viewitems");
 					su.add("pos1");
 					su.add("pos2");
 				} else {
 					if ("reload".startsWith(args[0].toLowerCase())) su.add("reload");
+					if ("toggle".startsWith(args[0].toLowerCase())) su.add("toggle");
 					if ("getwand".startsWith(args[0].toLowerCase())) su.add("getwand");
 					if ("setregion".startsWith(args[0].toLowerCase())) su.add("setregion");
 					if ("setspawner".startsWith(args[0].toLowerCase())) su.add("setspawner");
 					if ("spawn".startsWith(args[0].toLowerCase())) su.add("spawn");
 					if ("setitem".startsWith(args[0].toLowerCase())) su.add("setitem");
-					if ("getitem".startsWith(args[0].toLowerCase())) su.add("setitem");
+					if ("getitem".startsWith(args[0].toLowerCase())) su.add("getitem");
+					if ("removeitem".startsWith(args[0].toLowerCase())) su.add("removeitem");
 					if ("viewitems".startsWith(args[0].toLowerCase())) su.add("viewitems");
 					if ("pos1".startsWith(args[0].toLowerCase())) su.add("pos1");
 					if ("pos2".startsWith(args[0].toLowerCase())) su.add("pos2");
@@ -622,11 +705,22 @@ public class Main extends JavaPlugin implements Listener {
 		if (mobEntities.containsKey(event.getEntity().getUniqueId())) {
 			AliveMob aliveMob = mobEntities.get(event.getEntity().getUniqueId());
 			event.getDrops().clear();
-			for (ItemStack drop_item : aliveMob.mob.getDrops().keySet()) {
-				if ((random.nextInt(99) + 1) <= aliveMob.mob.getDrops().get(drop_item)) event.getDrops().add(drop_item);
+			for (ItemData dropItemData : aliveMob.mob.getDrops().keySet()) {
+				ItemStack dropItem = setStringData(dropItemData.itemStack, "customDisplayName", dropItemData.customDisplayName);
+				dropItem = setStringData(dropItem, "customDisplayNameVisible", String.valueOf(dropItemData.customDisplayNameVisible));
+				if ((random.nextInt(100) + 1) <= aliveMob.mob.getDrops().get(dropItemData)) event.getDrops().add(dropItem);
 			}
 			
 			mobEntities.remove(event.getEntity().getUniqueId());
+		}
+	}
+	
+	@EventHandler
+	public void onItemSpawn(org.bukkit.event.entity.ItemSpawnEvent event) {
+		ItemStack droppedItem = event.getEntity().getItemStack();
+		if (hasKey(droppedItem, "customDisplayName") && hasKey(droppedItem, "customDisplayNameVisible")) {
+			if (getStringData(droppedItem, "customDisplayNameVisible") == "true") event.getEntity().setCustomNameVisible(true);
+			event.getEntity().setCustomName(ChatColor.translateAlternateColorCodes('&', getStringData(droppedItem, "customDisplayName")));
 		}
 	}
 
@@ -668,19 +762,21 @@ class RegionSpawner {
 	final String name;
 	final String displayname;
 	final Integer maxSpawnedMobs;
+	final Integer maxSpawnedBosses;
 	final Location location;
-	final HashMap<Mob, Integer> mobs; // Integer number is probabilty from 1 to 100
-	final HashMap<Mob, Integer> bosses;
+	final LinkedHashMap<Mob, Integer> mobs; // Integer number is probabilty from 1 to 100
+	final LinkedHashMap<Mob, Integer> bosses;
 	final Integer mobSpawnDelay;
 	final Integer bossSpawnDelay;
 	Integer actualMobSpawnDelay = 0;
 	Integer actualBossSpawnDelay = 0;
 
-	public RegionSpawner(String ownerRegionName, String name, String displayname, Integer maxSpawnedMobs, Location location, HashMap<Mob, Integer> mobs, HashMap<Mob, Integer> bosses, Integer mobSpawnDelay, Integer bossSpawnDelay) {
+	public RegionSpawner(String ownerRegionName, String name, String displayname, Integer maxSpawnedMobs, Integer maxSpawnedBosses, Location location, LinkedHashMap<Mob, Integer> mobs, LinkedHashMap<Mob, Integer> bosses, Integer mobSpawnDelay, Integer bossSpawnDelay) {
 		this.ownerRegionName = ownerRegionName;
 		this.name = name;
 		this.displayname = displayname;
 		this.maxSpawnedMobs = maxSpawnedMobs;
+		this.maxSpawnedBosses = maxSpawnedBosses;
 		this.location = location;
 		this.mobs = mobs;
 		this.bosses = bosses;
@@ -704,16 +800,20 @@ class RegionSpawner {
 		return maxSpawnedMobs;
 	}
 	
+	public Integer getMaxSpawnedBosses() {
+		return maxSpawnedBosses;
+	}
+	
 	public Location getLocation() {
 		return location;
 	}
 	
-	public HashMap<Mob, Integer> getMobs() {
-		return new HashMap<>(mobs);
+	public LinkedHashMap<Mob, Integer> getMobs() {
+		return new LinkedHashMap<>(mobs);
 	}
 	
-	public HashMap<Mob, Integer> getBosses() {
-		return new HashMap<>(bosses);
+	public LinkedHashMap<Mob, Integer> getBosses() {
+		return new LinkedHashMap<>(bosses);
 	}
 	
 	public Integer getMobSpawnDelay() {
@@ -760,13 +860,13 @@ class Mob {
 	final ItemStack leggings;
 	final ItemStack boots;
 	final ItemStack handItem;
-	final HashMap<ItemStack, Integer> drops;
+	final HashMap<ItemData, Integer> drops;
 	final Double earnPerHit;
 	final Double earnPerKill;
 	final HashMap<String, Object> parameters;
 	final Mob passengerMob;
 	
-	public Mob(String name, String displayname, Boolean visibleDisplayName, EntityType type, Double health, Boolean isBoss, ItemStack helmet, ItemStack chestplate, ItemStack leggings, ItemStack boots, ItemStack handItem, HashMap<ItemStack, Integer> drops, Double earnPerHit, Double earnPerKill, HashMap<String, Object> parameters, Mob passengerMob) {
+	public Mob(String name, String displayname, Boolean visibleDisplayName, EntityType type, Double health, Boolean isBoss, ItemStack helmet, ItemStack chestplate, ItemStack leggings, ItemStack boots, ItemStack handItem, HashMap<ItemData, Integer> drops, Double earnPerHit, Double earnPerKill, HashMap<String, Object> parameters, Mob passengerMob) {
 		this.name = name;
 		this.displayname = displayname;
 		this.visibleDisplayName = visibleDisplayName;
@@ -793,7 +893,7 @@ class Mob {
 		spawnedEntity = (LivingEntity) nmsEntity.getBukkitEntity();
 		
 		spawnedEntity.setCanPickupItems(false);
-		spawnedEntity.setRemoveWhenFarAway(true); // <-- DA VERIFICARE
+		spawnedEntity.setRemoveWhenFarAway(true);
 		
 		spawnedEntity.setCustomName(ChatColor.translateAlternateColorCodes('&', getDisplayName()));
 		spawnedEntity.setCustomNameVisible(getVisibleDisplayName());
@@ -880,7 +980,7 @@ class Mob {
 		return handItem;
 	}
 	
-	public HashMap<ItemStack, Integer> getDrops() {
+	public HashMap<ItemData, Integer> getDrops() {
 		return new HashMap<>(drops);
 	}
 	
@@ -912,6 +1012,20 @@ class AliveMob {
 		this.mob = mob;
 		this.livingEntity = livingEntity;
 		this.ownerSpawner = ownerSpawner;
+	}
+
+}
+
+class ItemData {
+
+	public ItemStack itemStack;
+	public Boolean customDisplayNameVisible;
+	public String customDisplayName;
+	
+	public ItemData(ItemStack itemStack, Boolean customDisplayNameVisible, String customDisplayName) {
+		this.itemStack = itemStack;
+		this.customDisplayNameVisible = customDisplayNameVisible;
+		this.customDisplayName = customDisplayName;
 	}
 
 }
