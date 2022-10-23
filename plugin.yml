@@ -1,5 +1,5 @@
 name: WNMobArenas
-version: 0.2
+version: 0.3
 main: cloud.stivenfocs.wnmobarenas.Main
 authors: [StivenFocs]
 softdepend: [PlaceholderAPI,Vault]

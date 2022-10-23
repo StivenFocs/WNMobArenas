@@ -267,41 +267,43 @@ public class Main extends JavaPlugin implements Listener {
 				if (spawnToggle) {
 					for (ArenaRegion arenaRegion : arenaRegions.values()) {
 						for (RegionSpawner regionSpawner : arenaRegion.getSpawners().values()) {
-							if (regionSpawner.getActualMobSpawnDelay() <= 0) {
-								regionSpawner.resetActualMobSpawnDelay();
-								
-								if (getSpawnerMobs(regionSpawner).size() < regionSpawner.getMaxSpawnedMobs()) {
-									if (regionSpawner.getMobs().size() > 0) {
-										Integer luck = (random.nextInt(100) + 1);
-										for (Mob mob : regionSpawner.getMobs().keySet()) {
-											if (luck <= regionSpawner.getMobs().get(mob)) {
-												if (random.nextInt(3) == 1) {
-													mob.spawn(regionSpawner, regionSpawner.getLocation());
-													break;
+							if (regionSpawner.isEnabled()) {
+								if (regionSpawner.getActualMobSpawnDelay() <= 0) {
+									regionSpawner.resetActualMobSpawnDelay();
+									
+									if (getSpawnerMobs(regionSpawner).size() < regionSpawner.getMaxSpawnedMobs()) {
+										if (regionSpawner.getMobs().size() > 0) {
+											Integer luck = (random.nextInt(100) + 1);
+											for (Mob mob : regionSpawner.getMobs().keySet()) {
+												if (luck <= regionSpawner.getMobs().get(mob)) {
+													if (random.nextInt(3) == 1) {
+														mob.spawn(regionSpawner, regionSpawner.getLocation());
+														break;
+													}
 												}
 											}
 										}
 									}
-								}
-							} else regionSpawner.setActualMobSpawnDelay(regionSpawner.getActualMobSpawnDelay() - 1);
-							
-							if (regionSpawner.getActualBossSpawnDelay() <= 0) {
-								regionSpawner.resetActualBossSpawnDelay();
+								} else regionSpawner.setActualMobSpawnDelay(regionSpawner.getActualMobSpawnDelay() - 1);
 								
-								if (getSpawnerBosses(regionSpawner).size() < regionSpawner.getMaxSpawnedBosses()) {
-									if (regionSpawner.getBosses().size() > 0) {
-										Integer luck = (random.nextInt(100) + 1);
-										for (Mob boss : regionSpawner.getBosses().keySet()) {
-											if (luck <= regionSpawner.getBosses().get(boss)) {
-												if (random.nextInt(3) == 1) {
-													boss.spawn(regionSpawner, regionSpawner.getLocation());
-													break;
+								if (regionSpawner.getActualBossSpawnDelay() <= 0) {
+									regionSpawner.resetActualBossSpawnDelay();
+									
+									if (getSpawnerBosses(regionSpawner).size() < regionSpawner.getMaxSpawnedBosses()) {
+										if (regionSpawner.getBosses().size() > 0) {
+											Integer luck = (random.nextInt(100) + 1);
+											for (Mob boss : regionSpawner.getBosses().keySet()) {
+												if (luck <= regionSpawner.getBosses().get(boss)) {
+													if (random.nextInt(3) == 1) {
+														boss.spawn(regionSpawner, regionSpawner.getLocation());
+														break;
+													}
 												}
 											}
 										}
 									}
-								}
-							} else regionSpawner.setActualBossSpawnDelay(regionSpawner.getActualBossSpawnDelay() - 1);
+								} else regionSpawner.setActualBossSpawnDelay(regionSpawner.getActualBossSpawnDelay() - 1);
+							}
 						}
 					}
 				}
@@ -770,6 +772,8 @@ class RegionSpawner {
 	final Integer bossSpawnDelay;
 	Integer actualMobSpawnDelay = 0;
 	Integer actualBossSpawnDelay = 0;
+	
+	Boolean isEnabled = true;
 
 	public RegionSpawner(String ownerRegionName, String name, String displayname, Integer maxSpawnedMobs, Integer maxSpawnedBosses, Location location, LinkedHashMap<Mob, Integer> mobs, LinkedHashMap<Mob, Integer> bosses, Integer mobSpawnDelay, Integer bossSpawnDelay) {
 		this.ownerRegionName = ownerRegionName;
@@ -839,6 +843,14 @@ class RegionSpawner {
 	}
 	public void resetActualBossSpawnDelay() {
 		actualBossSpawnDelay = getBossSpawnDelay();
+	}
+	
+	public Boolean isEnabled() {
+		return isEnabled;
+	}
+	
+	public void setEnabled(Boolean newStatus) {
+		isEnabled = newStatus;
 	}
 	
 	public String toString() {
