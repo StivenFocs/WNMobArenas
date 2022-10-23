@@ -69,6 +69,7 @@ public class Main extends JavaPlugin implements Listener {
 				getConfig().set("options.mobs.common_zombie.displayname", "&a&lCommon Zombie");
 				getConfig().set("options.mobs.common_zombie.visible_displayname", true);
 				getConfig().set("options.mobs.common_zombie.type", "ZOMBIE");
+				getConfig().set("options.mobs.common_zombie.health", 20.0);
 				getConfig().set("options.mobs.common_zombie.is_boss", false);
 				getConfig().set("options.mobs.common_zombie.inventory.helmet", "common_zombie_helmet");
 				getConfig().set("options.mobs.common_zombie.inventory.chestplate", "common_zombie_chestplate");
@@ -78,6 +79,7 @@ public class Main extends JavaPlugin implements Listener {
 				getConfig().set("options.mobs.common_zombie.drops", new ArrayList<>());
 				getConfig().set("options.mobs.common_zombie.earn_per_hit", 5);
 				getConfig().set("options.mobs.common_zombie.earn_per_kill", 200);
+				getConfig().set("options.mobs.common_zombie.parameters.IsBaby", true);
 			}
 			if (getConfig().get("options.regions") == null) getConfig().createSection("options.regions");
 			getConfig().addDefault("options.mob_spawn_delay", 400);
@@ -89,6 +91,7 @@ public class Main extends JavaPlugin implements Listener {
 			getConfig().addDefault("messages.only_players", "&cSorry but only a player can execute this command!");
 			getConfig().addDefault("messages.incomplete_command", "&4Something is missing! &cSomething is missing, you can see the subcommands list by using /wnmobarenas");
 			getConfig().addDefault("messages.need_an_item", "&eYou have to hold and item in hand to set it.");
+			getConfig().addDefault("messages.item_not_found", "&cItem with name &f%item% &cnot found")
 			getConfig().addDefault("messages.item_saved", "&aItem successfully set in the configuration file.");
 			getConfig().addDefault("messages.you_got_wand", "&aYou got the &5&lRegionWand");
 			getConfig().addDefault("messages.invalid_region", "&cInvalid region selection");
@@ -100,6 +103,7 @@ public class Main extends JavaPlugin implements Listener {
 			getConfig().addDefault("messages.spawner_not_found", "&cSpawner with name &f%spawner% &cnot found in region &f%region%");
 			getConfig().addDefault("messages.mob_not_found", "&cMob with name &f%mob% &cnot found.");
 			getConfig().addDefault("messages.mob_spawned", "&2Mob spawned");
+			getConfig().addDefault("messages.added_to_inventory", "&aItem added to your inventory");
 			
 			saveConfig();
 			reloadConfig();
@@ -225,8 +229,6 @@ public class Main extends JavaPlugin implements Listener {
 						Integer mobSpawnDelay = getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".mob_spawn_delay", getConfig().getInt("options.mob_spawn_delay"));
 						Integer bossSpawnDelay = getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".boss_spawn_delay", getConfig().getInt("options.boss_spawn_delay"));
 						
-						System.out.println(sortedMap1);
-						
 						newRegionSpawners.put(spawnerName, new RegionSpawner(arenaRegionName, spawnerName, getConfig().getString("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".displayname", spawnerName), getConfig().getInt("options.regions." + arenaRegionName + ".spawners." + spawnerName + ".maxSpawnedMobs", 15), spawnerLocation, sortedMap, sortedMap1, mobSpawnDelay, bossSpawnDelay));
 					}
 					
@@ -245,11 +247,13 @@ public class Main extends JavaPlugin implements Listener {
 							
 							if (getSpawnerMobs(regionSpawner).size() < regionSpawner.getMaxSpawnedMobs()) {
 								if (regionSpawner.getMobs().size() > 0) {
-									Integer luck = (random.nextInt(99) + 1);
+									Integer luck = (random.nextInt(100) + 1);
 									for (Mob mob : regionSpawner.getMobs().keySet()) {
 										if (luck <= regionSpawner.getMobs().get(mob)) {
-											if (random.nextInt(6) == 1) mob.spawn(regionSpawner, regionSpawner.getLocation());
-											break;
+											if (new Random().nextInt(3) == 1) {
+												mob.spawn(regionSpawner, regionSpawner.getLocation());
+												break;
+											}
 										}
 									}
 									/*Mob randomMob = new ArrayList<>(regionSpawner.getMobs().keySet()).get(random.nextInt(regionSpawner.getMobs().size()));
@@ -265,11 +269,13 @@ public class Main extends JavaPlugin implements Listener {
 							
 							if (getSpawnerMobs(regionSpawner).size() < regionSpawner.getMaxSpawnedMobs()) {
 								if (regionSpawner.getBosses().size() > 0) {
-									Integer luck = (random.nextInt(99) + 1);
+									Integer luck = (random.nextInt(100) + 1);
 									for (Mob boss : regionSpawner.getBosses().keySet()) {
 										if (luck <= regionSpawner.getBosses().get(boss)) {
-											if (random.nextInt(6) == 1) boss.spawn(regionSpawner, regionSpawner.getLocation());
-											break;
+											if (new Random().nextInt(3) == 1) {
+												boss.spawn(regionSpawner, regionSpawner.getLocation());
+												break;
+											}
 										}
 									}
 								}
@@ -413,6 +419,7 @@ public class Main extends JavaPlugin implements Listener {
 				} else if (args[0].equalsIgnoreCase("setitem")) {
 					if (sender instanceof Player) {
 						Player p = (Player) sender;
+						
 						if (args.length > 1) {
 							ItemStack itemInHand = p.getInventory().getItemInHand();
 							if (itemInHand != null && !itemInHand.getType().equals(Material.AIR)) {
@@ -424,23 +431,37 @@ public class Main extends JavaPlugin implements Listener {
 							} else sendString("messages.need_an_item", sender);
 						} else sendString("messages.incomplete_command", sender);
 					} else sendString("messages.only_players", sender);
+				} else if (args[0].equalsIgnoreCase("getitem")) {
+					if (sender instanceof Player) {
+						Player p = (Player) sender;
+						
+						if (args.length > 1) {
+							if (items.containsKey(args[1])) {
+								p.getInventory().addItem(items.get(args[1]));
+								sendString("messages.added_to_inventory", sender);
+							} else sendString(getConfig().getString("messages.item_not_found").replace("%item%", args[1]), sender);
+						} else sendString("messages.incomplete_command", sender);
+					} else sendString("messages.only_players", sender);
 				} else if (args[0].equalsIgnoreCase("viewitems")) {
 					if (sender instanceof Player) {
 						Player p = (Player) sender;
 						org.bukkit.inventory.Inventory inv = Bukkit.createInventory(null, 54, "All saved items"); 
 						
-						//List<String> itemsNames = new ArrayList<>(getConfig().getConfigurationSection("options.items").getKeys(false));
 						int startIndex = 0;
 						
 						if (args.length > 1) {
 							if (isDigit(args[1])) {
 								startIndex = Integer.parseInt(args[1]);
 								if (startIndex < 0) startIndex = 0;
-							} else sendString("messages.integer_needed", sender);
+							} else {
+								sendString("messages.integer_needed", sender);
+								return true;
+							}
 						}
 						
+						List<ItemStack> items = new ArrayList<>(this.items.values());
 						for (int i = startIndex; i < items.size(); i++) {
-							if (items.containsKey(items.get(i))) inv.addItem(items.get(items.get(i)));
+							inv.addItem(items.get(i));
 						}
 						
 						p.openInventory(inv);
@@ -475,6 +496,7 @@ public class Main extends JavaPlugin implements Listener {
 					su.add("setspawner");
 					su.add("spawn");
 					su.add("setitem");
+					su.add("getitem");
 					su.add("viewitems");
 					su.add("pos1");
 					su.add("pos2");
@@ -485,6 +507,7 @@ public class Main extends JavaPlugin implements Listener {
 					if ("setspawner".startsWith(args[0].toLowerCase())) su.add("setspawner");
 					if ("spawn".startsWith(args[0].toLowerCase())) su.add("spawn");
 					if ("setitem".startsWith(args[0].toLowerCase())) su.add("setitem");
+					if ("getitem".startsWith(args[0].toLowerCase())) su.add("setitem");
 					if ("viewitems".startsWith(args[0].toLowerCase())) su.add("viewitems");
 					if ("pos1".startsWith(args[0].toLowerCase())) su.add("pos1");
 					if ("pos2".startsWith(args[0].toLowerCase())) su.add("pos2");
@@ -495,7 +518,7 @@ public class Main extends JavaPlugin implements Listener {
 						su.addAll(arenaRegions.keySet());
 					} else if (args[0].equalsIgnoreCase("spawn")) {
 						su.addAll(arenaRegions.keySet());
-					} else if (args[0].equalsIgnoreCase("setitem")) {
+					} else if (args[0].equalsIgnoreCase("setitem") || args[0].equalsIgnoreCase("getitem")) {
 						su.addAll(items.keySet());
 					} else if (args[0].equalsIgnoreCase("setspawner")) {
 						su.addAll(arenaRegions.keySet());
@@ -513,7 +536,7 @@ public class Main extends JavaPlugin implements Listener {
 								su.add(arenaRegionName);
 							}
 						}
-					} else if (args[0].equalsIgnoreCase("setitem")) {
+					} else if (args[0].equalsIgnoreCase("setitem") || args[0].equalsIgnoreCase("getitem")) {
 						for (String itemName : items.keySet()) {
 							if (itemName.toLowerCase().startsWith(args[1].toLowerCase())) {
 								su.add(itemName);
